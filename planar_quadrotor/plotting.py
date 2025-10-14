@@ -18,6 +18,7 @@ Module contains plotting functions.
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.collections import PatchCollection
+from matplotlib.lines import Line2D
 import matplotlib.animation as animation
 import numpy as np
 import tqdm
@@ -42,12 +43,14 @@ class Plotter:
         phase_plot_CI=False,
         phase_plot_nominal=False,
         control_plot=True,
+        lambda_plot=True,
         summary_plot=True,
         animate_pp1=True,
         latex_plots=False,
         save_plots=False,
         show_plots=True,
         legend_flag=False,
+        all=False,
     ):
         if latex_plots:
             plt.rcParams.update(
@@ -61,182 +64,57 @@ class Plotter:
         title_sz, xaxis_sz, legend_sz, ticks_sz = 20, 23, 18, 16
         lwp = 2.2
         lwp_sets = 2
-        x1 = x[0, :]
-        x2 = x[1, :]
+        if not all:
+            x = x[0]
+            env = env[0]
+            x1 = x[0, :]
+            x2 = x[1, :]
 
         def setupPhasePlot(fig=None, ax=None):
-            colors = True
+            colors = False
             # Plot limits
-            x_max = 0.5
+            x_max = 25.0
             x_min = -2
-            y_max = 1.4
+            y_max = 30.4
             y_min = -0.4
-            x_c = np.linspace(-4, 0, 1000)
-            y_c = np.sqrt(-2 * x_c * env.u_max)
-            y_c_d = np.sqrt(-2 * x_c * (env.u_max - env.dw_max)) - env.dw_max
+            # x_c = np.linspace(-4, 0, 1000)
+            # y_c = np.sqrt(-2 * x_c * env.u_max)
+            # y_c_d = np.sqrt(-2 * x_c * (env.u_max - env.dw_max)) - env.dw_max
 
             # x1 vs x2 plot
             # plt.figure(figsize=(12.5, 8.5), dpi=100)
             fig, ax = plt.subplots(figsize=(12.5, 8.5), dpi=100)
 
             if legend_flag:
-                plt.fill_between(
-                    [0, x_max],
-                    y_min,
-                    y_max,
+                # UNSAFE STATES [below zmin]
+                plt.fill_betweenx(
+                    [y_min, 1],
+                    x_min,
+                    x_max,
                     color=[249 / 255, 3 / 255, 255 / 255],  # Unsafe states are purple
-                    alpha=alpha_set,
-                    label="$\mathcal{X} \\backslash \mathcal{C}_{\\rm S}$ (Unsafe States)",
-                )
-                plt.vlines(
-                    x=0.0,
-                    ymin=0,
-                    ymax=y_max,
-                    color=[255 / 255, 0 / 255, 0 / 255],
-                    linewidth=lwp_sets,
+                    alpha=0.1,
+                    label="$\mathcal{X} \\backslash \mathcal{C}_{\\rm S}$ (Unsafe Position)",
                 )
                 plt.hlines(
-                    y=0.0,
+                    y=1.0,
                     xmin=x_min,
-                    xmax=0,
-                    color=[0 / 255, 176 / 255, 240 / 255],
-                    linewidth=lwp_sets,
-                    alpha=1,
-                )
-                if colors:
-                    plt.fill_between(
-                        x_c,
-                        y_c_d,
-                        y_max,
-                        color=[
-                            255 / 255,
-                            0 / 255,
-                            0 / 255,
-                        ],  # State constraint sets are red
-                        alpha=alpha_set,
-                        label="$\mathcal{C}_{\\rm S} \\backslash \mathcal{C}_{\\rm I}$",
-                    )
-                    plt.vlines(
-                        x=0.0,
-                        ymin=y_min,
-                        ymax=0,
-                        color=[0 / 255, 176 / 255, 240 / 255],
-                        alpha=1,
-                        linewidth=lwp_sets,
-                    )
-                    plt.plot(
-                        x_c,
-                        y_c_d,
-                        color=[255 / 255, 180 / 255, 123 / 255],
-                        alpha=1,
-                        linewidth=lwp_sets,
-                    )
-                    plt.fill_between(
-                        x_c,
-                        0,
-                        y_min,
-                        color=[193 / 255, 229 / 255, 245 / 255],
-                        alpha=alpha_set,
-                        label="$\mathcal{C}_{\\rm B}$",
-                    )
-                    if phase_plot_CI:
-                        y_c_d = np.sqrt(-2 * x1 * (env.u_max - env.dw_max)) - env.dw_max
-                        plt.fill_between(
-                            x1,
-                            x2,
-                            y_c_d,
-                            color=[
-                                255 / 255,
-                                180 / 255,
-                                123 / 255,
-                            ],  # Recoverable set CI is orange)
-                            alpha=alpha_set,
-                            label="$\mathcal{C}_{\\rm I}$",
-                        )
-                    else:
-                        plt.fill_between(
-                            x_c,
-                            0,
-                            # y_c,
-                            y_c_d,
-                            color=[255 / 255, 180 / 255, 123 / 255],
-                            alpha=alpha_set,
-                            label="$\mathcal{C}_{\\rm I}$",
-                        )
-            else:
-                plt.fill_between(
-                    [0, x_max],
-                    y_min,
-                    y_max,
-                    color=[255 / 255, 204 / 255, 204 / 255],
-                    alpha=alpha_set,
-                )
-                plt.vlines(
-                    x=0.0,
-                    ymin=0,
-                    ymax=y_max,
-                    color=[255 / 255, 0 / 255, 0 / 255],
+                    xmax=x_max,
+                    color=[249 / 255, 3 / 255, 255 / 255],
                     linewidth=lwp_sets,
                 )
-                plt.hlines(
-                    y=0.0,
-                    xmin=x_min,
-                    xmax=0,
-                    color=[0 / 255, 176 / 255, 240 / 255],
-                    linewidth=lwp_sets,
-                    alpha=1,
+                # SAFE STATES
+                plt.fill_betweenx(
+                    [1, y_max],
+                    x_min,
+                    x_max,
+                    color=[0 / 255, 255 / 255, 0 / 255],
+                    alpha=0.1,
+                    label="$\mathcal{C}_{\\rm S}$ (Safe Position)",
                 )
-                if colors:
-                    plt.fill_between(
-                        x_c,
-                        y_c_d,
-                        y_max,
-                        color=[255 / 255, 180 / 255, 123 / 255],
-                        alpha=alpha_set,
-                    )
-                    plt.vlines(
-                        x=0.0,
-                        ymin=y_min,
-                        ymax=0,
-                        color=[0 / 255, 176 / 255, 240 / 255],
-                        alpha=1,
-                        linewidth=lwp_sets,
-                    )
-                    plt.plot(
-                        x_c,
-                        y_c_d,
-                        color=[84 / 255, 130 / 255, 53 / 255],
-                        alpha=1,
-                        linewidth=lwp_sets,
-                    )
-                    plt.fill_between(
-                        x_c,
-                        0,
-                        y_min,
-                        color=[193 / 255, 229 / 255, 245 / 255],
-                        alpha=alpha_set,
-                    )
-                    if phase_plot_CI:
-                        y_c_d = np.sqrt(-2 * x1 * (env.u_max - env.dw_max)) - env.dw_max
-                        plt.fill_between(
-                            x1,
-                            x2,
-                            y_c_d,
-                            color=[217 / 255, 242 / 255, 208 / 255],
-                            alpha=alpha_set,
-                        )
-                    else:
-                        plt.fill_between(
-                            x_c,
-                            0,
-                            y_c_d,
-                            color=[217 / 255, 242 / 255, 208 / 255],
-                            alpha=alpha_set,
-                        )
 
             plt.axis("equal")
-            plt.xlabel(r"$x_1$", fontsize=xaxis_sz)
-            plt.ylabel(r"$x_2$", fontsize=xaxis_sz)
+            plt.xlabel(r"$x \, (m)$", fontsize=xaxis_sz)
+            plt.ylabel(r"$z \, (m)$", fontsize=xaxis_sz)
             plt.xlim([x_min, x_max])
             plt.ylim([y_min, y_max])
             plt.xticks(fontsize=ticks_sz)
@@ -250,17 +128,204 @@ class Plotter:
         # Phase plot 1 (no disturbance radii)
         if phase_plot_1:
             setupPhasePlot()
-            plt.plot(x1, x2, "-", color="magenta", linewidth=lwp, label="Trajectory")
+            color_list = [
+                "green",
+                "blue",
+                "orange",
+                "purple",
+                "brown",
+                "magenta",
+                "cyan",
+            ]
+            ax = plt.gca()
+            for itr, x_data in enumerate(x):
+                env_curr = env[itr]
+                color = color_list[itr % len(color_list)]
+                plt.plot(
+                    x_data[0, :],
+                    x_data[1, :],
+                    "-",
+                    linewidth=lwp,
+                    color=color,
+                    label=f"$\\delta_d$: {env_curr.dw_max}",
+                )
+                # Draw orientation at start
+                angle_rad = np.radians(x_data[2, 0])
+                current_point = np.array([x_data[0, 0], x_data[1, 0]])
+                body_length = 1.0
+                body_thick = 0.02
+                half_w = body_length / 2
+
+                dx, dy = half_w * np.cos(angle_rad), half_w * np.sin(angle_rad)
+                pt1 = current_point - np.array([dx, dy])
+                pt2 = current_point + np.array([dx, dy])
+                ax.plot([pt1[0], pt2[0]], [pt1[1], pt2[1]], color="k", linewidth=1.5)
+
+                dxp, dyp = (half_w / 2) * -np.sin(angle_rad), (half_w / 2) * np.cos(
+                    angle_rad
+                )
+                wp1 = current_point - np.array([dxp, dyp])
+                wp2 = current_point + np.array([dxp, dyp])
+                ax.plot([wp1[0], wp2[0]], [wp1[1], wp2[1]], color="k", linewidth=1.5)
+
+                tri_size = 0.3
+                marker = patches.RegularPolygon(
+                    xy=current_point,
+                    numVertices=3,
+                    radius=tri_size,
+                    orientation=angle_rad,
+                    facecolor="k",
+                    edgecolor="none",
+                    zorder=2,
+                )
+                ax.add_patch(marker)
+                for i, _ in enumerate(zip(x_data[0, :], x_data[1, :])):
+                    if i == 0:
+                        current_point = np.array([x_data[0, i], x_data[1, i]])
+                        angle_rad = np.radians(x_data[2, i])
+                        body_length = 0.2
+                        body_thick = 0.02
+                        half_w = body_length / 2
+
+                        dx, dy = half_w * np.cos(angle_rad), half_w * np.sin(angle_rad)
+                        pt1 = current_point - np.array([dx, dy])
+                        pt2 = current_point + np.array([dx, dy])
+                        ax.plot(
+                            [pt1[0], pt2[0]], [pt1[1], pt2[1]], color="k", linewidth=1.5
+                        )
+
+                        dxp, dyp = (half_w / 2) * -np.sin(angle_rad), (
+                            half_w / 2
+                        ) * np.cos(angle_rad)
+                        wp1 = current_point - np.array([dxp, dyp])
+                        wp2 = current_point + np.array([dxp, dyp])
+                        ax.plot(
+                            [wp1[0], wp2[0]], [wp1[1], wp2[1]], color="k", linewidth=1.5
+                        )
+
+                        tri_size = 0.06
+                        marker = patches.RegularPolygon(
+                            xy=current_point,
+                            numVertices=3,
+                            radius=tri_size,
+                            orientation=angle_rad,
+                            facecolor="k",
+                            edgecolor="none",
+                            zorder=2,
+                        )
+                    ax.add_patch(marker)
+
+                # # Plot backup trajectories if present
+                # if env_curr.backupTrajs:
+                #     for i, xy in enumerate(env_curr.backupTrajs):
+                #         label = "Nominal Backup Trajectory" if i == 0 else None
+                #         plt.plot(
+                #             xy[:, 0],
+                #             xy[:, 1],
+                #             color="cyan",
+                #             linewidth=1.5,
+                #             label=label,
+                #             zorder=1,
+                #         )
+
+            ax.legend(fontsize=legend_sz - 5, loc="upper right")
+
+        gw_edge_color = "#bababa"
+
+        # Phase plot 2 (with GW disturbance radii)
+        if phase_plot_2a:
+            setupPhasePlot()
             ax = plt.gca()
 
-            if env.backupTrajs:
-                for i, xy in enumerate(env.backupTrajs):
-                    if i == 0:
-                        label = "Nominal Backup Trajectory"
-                    else:
-                        label = None
+            # ── Draw the same T-bars + orientation triangle as in Phase 1 ─────────────
+            for itr, x_data in enumerate(x):
+                env_curr = env[itr]
+                plt.plot(
+                    x_data[0, :],
+                    x_data[1, :],
+                    "-",
+                    color="magenta",
+                    linewidth=lwp,
+                    label="Trajectory",
+                )
+                for i in range(0, len(x_data[0, :]), env_curr.backup_save_N):
+                    current_point = np.array([x_data[0, i], x_data[1, i]])
+                    angle_rad = np.radians(x_data[2, i])  # already in radians
+                    half_w = 1.0 / 2  # your body_length/2
+                    body_thick = 0.02
+                    # body segment endpoints
+                    dx, dy = half_w * np.cos(angle_rad), half_w * np.sin(angle_rad)
+                    pt1 = current_point - np.array([dx, dy])
+                    pt2 = current_point + np.array([dx, dy])
+                    ax.plot(
+                        [pt1[0], pt2[0]],
+                        [pt1[1], pt2[1]],
+                        color="k",
+                        linewidth=1.5,
+                        zorder=2,
+                    )
 
-                    plt.plot(
+                    # wing (perpendicular)
+                    dxp, dyp = (half_w / 2) * -np.sin(angle_rad), (half_w / 2) * np.cos(
+                        angle_rad
+                    )
+                    wp1 = current_point - np.array([dxp, dyp])
+                    wp2 = current_point + np.array([dxp, dyp])
+                    ax.plot(
+                        [wp1[0], wp2[0]],
+                        [wp1[1], wp2[1]],
+                        color="k",
+                        linewidth=1.5,
+                        zorder=2,
+                    )
+
+                    # orientation triangle on top
+                    tri = patches.RegularPolygon(
+                        xy=current_point,
+                        numVertices=3,
+                        radius=0.3,
+                        orientation=angle_rad,
+                        facecolor="k",
+                        edgecolor="none",
+                        zorder=3,
+                    )
+                    ax.add_patch(tri)
+
+            # ── Now do your backup trajectories + GW-balls exactly as before ─────────
+            if env_curr.backupTrajs:
+                rta_points = len(env_curr.backupTrajs[0])
+                # e_tstep = int(np.floor(rta_points / 3 - 1 / 3))
+                e_tstep = 1
+                max_numBackup = len(env_curr.backupTrajs)
+                for i, xy in enumerate(env_curr.backupTrajs):
+                    label = "Nominal Backup Trajectory" if i == 0 else None
+
+                    # draw the GW balls if robust
+                    if env_curr.robust:
+                        circ = []
+                        for j in np.arange(0, rta_points, e_tstep):
+                            r_t = env_curr.delta_array[i][j]
+                            circ.append(
+                                patches.Circle(
+                                    (xy[j, 0], xy[j, 1]),
+                                    r_t,
+                                    fill=False,
+                                    linestyle="--",
+                                    edgecolor=gw_edge_color,
+                                )
+                            )
+                        coll = PatchCollection(
+                            circ,
+                            facecolors="none",
+                            edgecolors=gw_edge_color,  # now honours your grey
+                            linewidths=1,
+                            linestyles="--",
+                            zorder=1,
+                        )
+                        ax.add_collection(coll)
+
+                    # then the cyan backup path
+                    ax.plot(
                         xy[:, 0],
                         xy[:, 1],
                         color="cyan",
@@ -269,63 +334,27 @@ class Plotter:
                         zorder=1,
                     )
 
-            ax.legend(fontsize=legend_sz, loc="upper right")
+            ax.legend(fontsize=legend_sz, loc="lower right")
 
-        gw_edge_color = "#bababa"
+            # after you’ve drawn everything, grab the existing handles:
+            handles, labels = ax.get_legend_handles_labels()
 
-        # Phase plot 2 (with GW disturbance radii)
-        if phase_plot_2a:
-            setupPhasePlot()
-            plt.plot(x1, x2, "-", color="magenta", linewidth=lwp, label="Trajectory")
+            # create a dummy line that looks like your circles
+            proxy = Line2D(
+                [0],
+                [0],
+                color=gw_edge_color,
+                lw=1,
+                linestyle="--",
+                label="GW Norm Ball",
+            )
 
-            ax = plt.gca()
-
-            e_tstep = 10
-            if env.backupTrajs:
-                rta_points = len(env.backupTrajs[0])
-                max_numBackup = len(env.backupTrajs)  # 15
-                for i, xy in enumerate(env.backupTrajs):
-                    if i == 0:
-                        label = "Nominal Backup Trajectory"
-                    else:
-                        label = None
-
-                    if i < max_numBackup:
-                        circ = []
-                        if env.robust:
-                            for j in np.arange(0, rta_points, e_tstep):
-                                t = j * env.del_t
-                                r_t = env.delta_array[j]
-                                cp = patches.Circle(
-                                    (xy[j, 0], xy[j, 1]),
-                                    r_t,
-                                    color=gw_edge_color,
-                                    fill=False,
-                                    linestyle="--",
-                                    label="GW Norm Ball",
-                                )
-                                if i == 0 and j == 0:
-                                    ax.add_patch(cp)
-                                circ.append(cp)
-                            coll = PatchCollection(
-                                circ,
-                                zorder=100,
-                                facecolors=("none",),
-                                edgecolors=(gw_edge_color,),
-                                linewidths=(1,),
-                                linestyle=("--",),
-                            )
-                            ax.add_collection(coll)
-                        plt.plot(
-                            xy[:, 0],
-                            xy[:, 1],
-                            color="cyan",
-                            linewidth=1.5,
-                            label=label,
-                            zorder=1,
-                        )
-
-            ax.legend(fontsize=legend_sz, loc="upper right")
+            # append it and re-draw the legend
+            handles.append(proxy)
+            labels.append("GW Norm Ball")
+            ax.legend(
+                handles=handles, labels=labels, fontsize=legend_sz, loc="upper right"
+            )
 
         # Phase plot 2 (with GW disturbance radii)
         if phase_plot_2b:
@@ -419,9 +448,6 @@ class Plotter:
                 fontsize=lblsize,
             )
 
-        delta_t = env.del_t
-        t_span_u = np.arange(u_act.shape[1] - 1) * delta_t
-
         if phase_plot_nominal:
             setupPhasePlot()
             plt.plot(
@@ -438,43 +464,116 @@ class Plotter:
             ax.legend(fontsize=legend_sz, loc="upper right")
 
         if control_plot:
+
+            del_t = env[0].del_t
+            # u_act_all is a list of lists. The primary control is the same for all instances.
+            # Plot all actual controls, and overlay the primary control and lambda scores.
+
             ax = plt.figure(figsize=(10, 7), dpi=100)
             ax = ax.add_subplot(111)
             ax.grid(True)
             plt.xticks(fontsize=ticks_sz)
             plt.yticks(fontsize=ticks_sz)
-            color = "green"
+            color_list = [
+                "green",
+                "blue",
+                "orange",
+                "purple",
+                "brown",
+                "magenta",
+                "cyan",
+            ]
+
+            # Plot all actual controls
+            for idx, u_act_i in enumerate(u_act):
+                t_span_u = np.arange(len(u_act_i[0]) - 1) * del_t
+                color = color_list[idx % len(color_list)]
+                ax.plot(
+                    t_span_u,
+                    u_act_i[0][1:],
+                    "-",
+                    color=color,
+                    label=f"$\delta_{{\\rm d}} = $ {env[idx].dw_max}",
+                    linewidth=lwp,
+                )
+
+            # Overlay the primary control (assume u_p is a single array)
             ax.plot(
                 t_span_u,
-                u_p[0][1:],
+                u_p[0][0][1:],
                 "--",
                 color="red",
                 label="$u_{\\rm des}$",
                 linewidth=lwp,
             )
-            ax.plot(
-                t_span_u,
-                u_act[0][1:],
-                "-",
-                color=color,
-                label="$u_{\\rm act}$",
-                linewidth=lwp,
-            )
-            ax.plot(
-                t_span_u,
-                lambda_scores,
-                "-",
-                color="black",
-                label="$\lambda$",
-                linewidth=lwp,
-            )
-            ax.set_ylim(-1.2, 1.2)
-            ax.set_ylabel("u", fontsize=xaxis_sz)
 
+            # # Overlay the lambda scores (assume lambda_scores is a single array)
+            # ax.plot(
+            #     t_span_u,
+            #     lambda_scores,
+            #     "-",
+            #     color="black",
+            #     label="$\lambda$",
+            #     linewidth=lwp,
+            # )
+
+            ax.set_ylim(-5, env[0].F_max + 5)
+            ax.set_ylabel("Total Force $F_{\\rm max}$")
             ax.legend(fontsize=legend_sz, loc="lower right")
-            plt.xlabel("time, t (s)", fontsize=xaxis_sz)
+            plt.xlabel("time, t (s)")
             if save_plots:
                 plt.savefig("plots/control_plot.svg", dpi=100)
+
+        if lambda_plot:
+
+            del_t = env[0].del_t
+            # u_act_all is a list of lists. The primary control is the same for all instances.
+            # Plot all actual controls, and overlay the primary control and lambda scores.
+
+            ax = plt.figure(figsize=(10, 7), dpi=100)
+            ax = ax.add_subplot(111)
+            ax.grid(True)
+            plt.xticks(fontsize=ticks_sz)
+            plt.yticks(fontsize=ticks_sz)
+            color_list = [
+                "green",
+                "blue",
+                "orange",
+                "purple",
+                "brown",
+                "magenta",
+                "cyan",
+            ]
+
+            # Plot all actual lambda scores
+            for idx, lambda_scores_i in enumerate(lambda_scores):
+                t_span_u = np.arange(len(lambda_scores_i) - 1) * del_t
+                color = color_list[idx % len(color_list)]
+                ax.plot(
+                    t_span_u,
+                    lambda_scores_i[1:],
+                    "-",
+                    color=color,
+                    label=f"$\delta_{{\\rm d}} = $ {env[idx].dw_max}",
+                    linewidth=lwp,
+                )
+
+            # Overlay lambda score max
+            ax.plot(
+                t_span_u,
+                np.ones_like(t_span_u),
+                "--",
+                color="red",
+                label="$\lambda_{\\rm max}$",
+                linewidth=lwp,
+            )
+
+            ax.set_ylim(-0.2, 1.2)
+            ax.set_ylabel("$\lambda$-scores")
+            ax.legend(fontsize=legend_sz, loc="lower right")
+            plt.xlabel("time, t (s)")
+            if save_plots:
+                plt.savefig("plots/lambda_plot.svg", dpi=100)
 
         if summary_plot:
 

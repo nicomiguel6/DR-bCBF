@@ -24,29 +24,16 @@ class Control:
     ) -> None:
 
         # Control limits
-        self.F_max = 20
-        self.M_max = 20
-
-        self.F_bounds = [0.0, self.F_max]
-        self.M_bounds = [-self.M_max, self.M_max]
-        self.u_bounds = [[0.0, -self.M_max], [self.F_max, self.M_max]]
-
-        self.Kp = 1.0
-        self.Kd = 1.01
-        self.J = 0.25
-        self.m = 1
-        self.beta = 1000.0
-
-        self.kappa = 5
-        self.theta_max = 55
-        self.thetadot_max = 3
+        self.u_max = 1
+        self.u_bounds = [-self.u_max, self.u_max]
+        self.beta = 1
 
     def primaryControl(self, x_curr, t):
         """
         Primary controller producing desired control at each step.
 
         """
-        u_des = np.array([0.0, 0.0])
+        u_des = self.u_max
         return u_des
 
     def backupControl(self, x):
@@ -54,12 +41,7 @@ class Control:
         Safe backup controller. Constant for this application.
 
         """
-        u_b = np.array(
-            [
-                self.F_max,
-                np.clip(self.Kp * x[2] + self.Kd * x[5], -self.M_max, self.M_max),
-            ]
-        )
+        u_b = -self.u_max
         return u_b
 
     def lambdaScore(self, x, hi_min):
@@ -70,9 +52,7 @@ class Control:
 
         # assume self.hi_max has been calculated already for state x
 
-        lambda_score = 1 - np.exp(-self.beta * hi_min)  # / np.max([x[1], 0.0001]))
-
-        return lambda_score
+        return 1 - np.exp(-self.beta * hi_min)  # / np.max([x[1], 0.0001]))
 
     def blendInputs(self, x, u_des, u_backup, hi_min):
 

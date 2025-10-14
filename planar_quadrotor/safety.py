@@ -23,12 +23,6 @@ from scipy.integrate import quad, solve_ivp
 
 
 class Constraint:
-    def __init__(self):
-
-        self.kappa = 5
-        self.theta_max = 55
-        self.thetadot_max = 3
-
     def alpha(self, x):
         """
         Strengthening function.
@@ -49,7 +43,7 @@ class Constraint:
         Safety constraint.
 
         """
-        h = x[1]
+        h = x[1] - 1
         return h
 
     def h1_x(self, x):
@@ -65,7 +59,7 @@ class Constraint:
         Safety constraint.
 
         """
-        h = self.theta_max**2 - x[2] ** 2
+        h = np.radians(self.theta_max**2 - x[2] ** 2)
         return h
 
     def h3_x(self, x):
@@ -73,7 +67,7 @@ class Constraint:
         Safety constraint.
 
         """
-        h = self.thetadot_max**2 - x[5] ** 2
+        h = self.thetadot_max**2 - np.radians(x[5]) ** 2
         return h
 
     def grad_h1(self, x):
@@ -115,21 +109,30 @@ class ASIF(Constraint):
         super().__init__()
 
         # Backup properties
-        self.backupTime = 1.25  # [sec] (total backup time)
+        self.backupTime = 0.1  # [sec] (total backup time)
         self.backupTrajs = []
-        self.backup_save_N = 5  # saves every N backup trajectory (for plotting)
-        self.delta_array = [0]
+        self.backup_save_N = 10  # saves every N backup trajectory (for plotting)
+        self.delta_array = []  # saves each run's delta array
 
         # Tightening constants
-        self.Lh_const = 1
-        self.Lhb_const = 1
-        self.L_cl = 1  # Lipschitz constant of closed-loop dynamics
+        self.Lh_const = 1.0
+        self.Lhb_const = 4 * np.pi
+        # self.L_cl = np.max(
+        #     [
+        #         np.abs(self.F_max / self.m) + np.abs(1 / 2 - self.Kp / (2 * self.J)),
+        #         1 / 2 + np.abs(self.F_max / (2 * self.m)),
+        #         np.abs(1 / 2 - self.Kp / (2 * self.J))
+        #         + 2 * np.abs(self.Kd / (2 * self.J)),
+        #     ]
+        # )  # upper bound on log norm of closed-loop dynamics via Gershgorin disc theorem
+        self.L_cl = 0.5
 
         # Blending constants
         self.blending_bool = blending_bool
         self.control_tightening = control_tightening
+        self.final_delta_array = []
 
-    def asif(self, x, u_des):
+    def asif(self, x, u_des, t_global):
         """
         Implicit active set invariance filter (ASIF) using QP.
 
@@ -149,29 +152,37 @@ class ASIF(Constraint):
 
             # Discretization tightening constant
             mu_d = (self.del_t / 2) * self.Lh_const * (self.sup_fcl + self.dw_max)
+            # Disturbance error bound
+            e_bar = np.exp(-self.disturbance_gain * t_global) * self.dw_max + (
+                self.dv_max / self.disturbance_gain
+            ) * (1 - np.exp(-self.disturbance_gain * t_global))
 
-            if len(self.delta_array) < rtapoints:
-                for i in range(1, rtapoints):
-                    # calculate tightening terms
-                    t = self.del_t * i
+            ind_delta_array = [0]  # store current run's delta array
 
-                    # Gronwall bound
-                    delta_t = (self.dw_max / self.L_cl) * (np.exp(self.L_cl * t) - 1)
+            # if len(self.delta_array) < rtapoints:
+            for i in range(1, rtapoints):
+                # calculate tightening terms
+                t = self.del_t * i
 
-                    # # Disturbance obs bound
-                    # e_bar = np.exp(-t) * self.dw_max + (self.dv_max) * (1 - np.exp(-t))
-                    # delta_t = ((self.dv_max / self.L_cl**2) + (e_bar / self.L_cl)) * (
-                    #     np.exp(self.L_cl * t - 1) - (self.dv_max / self.L_cl) * t
-                    # )
+                # Gronwall bound
+                # delta_t = (self.dw_max / self.L_cl) * (np.exp(self.L_cl * t) - 1)
 
-                    # Tightening epsilon
-                    epsilon = self.Lh_const * delta_t
+                # Disturbance obs bound
+                delta_t = ((self.dv_max / self.L_cl**2) + (e_bar / self.L_cl)) * (
+                    np.exp(self.L_cl * t) - 1
+                ) - (self.dv_max / self.L_cl) * t
 
-                    self.delta_array.append(delta_t)
+                # Tightening epsilon
+                epsilon = self.Lh_const * delta_t
 
-                    if i == rtapoints - 1:
-                        # calculate epsilon_b
-                        self.epsilon_b = self.Lhb_const * delta_t
+                ind_delta_array.append(delta_t)
+
+                if i == rtapoints - 1:
+                    # calculate epsilon_b
+                    self.epsilon_b = self.Lhb_const * delta_t
+                    self.final_delta_array.append(delta_t)
+
+            self.delta_array.append(ind_delta_array)
 
             # State tracking array
             lenx = len(self.x0)
@@ -180,6 +191,8 @@ class ASIF(Constraint):
 
             # Simulate flow under backup control law
             new_x = x
+
+            # Propagate flow following constant estimated disturbance
 
             backupFlow = self.integrateStateBackup(
                 new_x,
@@ -196,7 +209,7 @@ class ASIF(Constraint):
             min_h_value = np.min(
                 [
                     self.h_x(phi[itx, :])
-                    - int(self.control_tightening) * (self.delta_array[itx] + mu_d)
+                    - int(self.control_tightening) * (ind_delta_array[itx] + mu_d)
                     for itx in range(rtapoints)
                 ]
             )
@@ -209,7 +222,7 @@ class ASIF(Constraint):
             # Calculate blending function
             u_b = self.backupControl(x)
 
-            u_act, lambda_score = self.blendInputs(x, u_des, u_b, np.max(hi_x, 0))
+            u_act, lambda_score = self.blendInputs(x, u_des, u_b, np.max([hi_x, 0]))
 
             self.lambda_score = lambda_score
 

@@ -34,17 +34,15 @@ class Simulation(ASIF, Control, Dynamics):
         blending_bool=False,
         primary_control=False,
         control_tightening=True,
-        observer=True,
     ) -> None:
 
         self.blending_bool = blending_bool
         self.primary_control = primary_control
         self.control_tightening = control_tightening
-        self.observer = observer
 
-        self.setupControl()
         self.setupDynamics(self.blending_bool)
         self.setupASIF(self.blending_bool, self.control_tightening)
+        self.setupControl()
 
         self.verbose = verbose
         self.safety_flag = safety_flag
@@ -84,20 +82,6 @@ class Simulation(ASIF, Control, Dynamics):
         # Disturbance variables
         self.dw_full = np.zeros((len(x0), total_steps))
 
-        # Observer variables
-        xi_full = np.zeros((len(x0), total_steps))  # auxiliary state at each time step
-        d_hat_full = np.zeros(
-            (len(x0), total_steps)
-        )  # disturbance estimate at each time step
-        self.disturbance_gain = 10
-        self.disturbance_gain_matrix = self.disturbance_gain * np.eye(len(x0))
-
-        xi_full[:, 0] = x0
-        xi_curr = xi_full[:, 0]
-        d_hat_full[:, 0] = np.zeros_like(x0)
-        d_hat_curr = d_hat_full[:, 0]
-        self.d_hat_curr = d_hat_curr
-
         # Main loop
         for i in range(1, total_steps):
             t = self.curr_step * self.del_t
@@ -108,7 +92,7 @@ class Simulation(ASIF, Control, Dynamics):
 
             # If safety check on, monitor control using active set invariance filter with DR-bCBF
             if self.safety_flag and not self.primary_control:
-                u, boolean, sdt = self.asif(x_curr, u_des, t)
+                u, boolean, sdt = self.asif(x_curr, u_des)
                 solver_times.append(sdt)
                 if boolean:
                     intervened.append(i)
@@ -126,15 +110,6 @@ class Simulation(ASIF, Control, Dynamics):
 
             u_act_full[:, i] = u
 
-            # Propagate auxiliary state with control
-            xi_curr = self.integrateState(
-                x_curr,
-                u,
-                self.del_t,
-                d_hat_curr,
-                self.int_options,
-            )
-
             # Propagate states with control and disturbances (if applicable)
             x_curr = self.integrateState(
                 x_curr,
@@ -143,23 +118,11 @@ class Simulation(ASIF, Control, Dynamics):
                 dw,
                 self.int_options,
             )
-
-            # Propagate estimated disturbance
-            d_hat_curr = self.disturbance_gain_matrix @ (x_curr - xi_curr)
-
-            # dx = self.f_x(x_curr) + self.g_x(x_curr) @ u
-            # x_curr += dx * self.del_t
             x_full[:, i] = x_curr
-            xi_full[:, i] = xi_curr
-            d_hat_full[:, i] = d_hat_curr
 
             self.curr_step += 1
-            self.d_hat_curr = d_hat_curr
-            # if self.h1_x(x_curr) < 0:
-            #     print("Crashed")
-
-        self.xi_full = xi_full
-        self.d_hat_full = d_hat_full
+            if self.h1_x(x_curr) < 0:
+                print("Crashed")
 
         if self.verbose and self.safety_flag:
             solver_times = [
@@ -185,105 +148,78 @@ class Simulation(ASIF, Control, Dynamics):
 
 if __name__ == "__main__":
 
-    # deltad = [0.05, 0.1, 0.25, 0.5]  # Disturbance magnitudes
-    deltad = [np.sqrt(1.5)]  # For testing purposes
+    env = Simulation(
+        safety_flag=True,
+        verbose=True,
+        robust=True,
+        dw_bool=True,
+        blending_bool=True,
+        primary_control=False,
+        control_tightening=True,
+    )
+    print(
+        "Running simulation with parameters:",
+        "Safety:",
+        env.safety_flag,
+        "| Robustness:",
+        env.robust,
+        "| Process dist:",
+        env.dw_bool,
+    )
 
-    x_all = []
-    u_des_all = []
-    u_act_all = []
-    lambda_scores_all = []
-    env_all = []
+    (
+        x_full,
+        total_steps,
+        u_des_full,
+        u_act_full,
+        intervened,
+        avg_solver_t,
+        max_solver_t,
+        lambda_scores,
+    ) = env.sim()
 
-    for delta_d in deltad:
+    # timestamp = datetime.now().strftime("%Y%m%d%H%M%s")
+    filename = "data\\Blending_{}_Tightening_{}".format(
+        env.blending_bool, env.control_tightening
+    )
 
-        env = Simulation(
-            safety_flag=True,
-            verbose=True,
-            robust=True,
-            dw_bool=True,
-            blending_bool=True,
-            primary_control=False,
-            control_tightening=True,
-        )
-        env.dw_max = delta_d
-        print(
-            "Running simulation with parameters:",
-            "Safety:",
-            env.safety_flag,
-            "| Robustness:",
-            env.robust,
-            "| Process dist:",
-            env.dw_bool,
-            "| dw_max:",
-            env.dw_max,
-        )
+    data_store_dict = {
+        "x_full": x_full,
+        "total_steps": total_steps,
+        "u_des_full": u_des_full,
+        "u_act_full": u_act_full,
+        "intervened": intervened,
+        "avg_solver_t": avg_solver_t,
+        "max_solver_t": max_solver_t,
+        "lambda_scores": lambda_scores,
+    }
 
-        (
-            x_full,
-            total_steps,
-            u_des_full,
-            u_act_full,
-            intervened,
-            avg_solver_t,
-            max_solver_t,
-            lambda_scores,
-        ) = env.sim()
+    attrs = {k: v for k, v in env.__dict__.items() if not k.startswith("_")}
 
-        filename = (
-            "data\\Disturbance_deltad_{}".format(
-                env.dw_max
-            )  # for experiment without observers
-            if not hasattr(env, "dv_max")
-            else "data\\Disturbance_deltad_{}_deltav_{}".format(env.dw_max, env.dv_max)
-        )
+    data_store_dict.update(attrs)
 
-        data_store_dict = {
-            "x_full": x_full,
-            "total_steps": total_steps,
-            "u_des_full": u_des_full,
-            "u_act_full": u_act_full,
-            "intervened": intervened,
-            "avg_solver_t": avg_solver_t,
-            "max_solver_t": max_solver_t,
-            "lambda_scores": lambda_scores,
-        }
-
-        attrs = {k: v for k, v in env.__dict__.items() if not k.startswith("_")}
-
-        data_store_dict.update(attrs)
-
-        # np.savez(filename + ".npz", **data_store_dict)
-
-        # with open(filename, "w") as outfile:
-        #     json.dump(data_store_dict, outfile)
-
-        x_all.append(x_full)
-        u_des_all.append(u_des_full)
-        u_act_all.append(u_act_full)
-        lambda_scores_all.append(lambda_scores)
-        env_all.append(env)
+    # with open(filename, "w") as outfile:
+    #     json.dump(data_store_dict, outfile)
 
     p = Plotter()
 
     p.plotter(
-        x_all,
-        u_act_all,
+        x_full,
+        u_act_full,
         intervened,
-        u_des_all,
-        env_all,
-        lambda_scores_all,
+        u_des_full,
+        env,
+        lambda_scores,
         phase_plot_1=False,
         phase_plot_2a=True,
         phase_plot_2b=False,
         phase_plot_CI=False,
         phase_plot_nominal=False,
         summary_plot=False,
-        control_plot=False,
-        lambda_plot=False,
+        control_plot=True,
         animate_pp1=False,
         latex_plots=True,
         save_plots=False,
         show_plots=True,
         legend_flag=True,
-        all=True,
     )

@@ -19,10 +19,16 @@ import numpy as np
 import time
 import math
 import quadprog
-from scipy.integrate import quad
+from scipy.integrate import quad, solve_ivp
 
 
 class Constraint:
+    def __init__(self):
+
+        self.kappa = 5
+        self.theta_max = 55
+        self.thetadot_max = 3
+
     def alpha(self, x):
         """
         Strengthening function.
@@ -38,12 +44,36 @@ class Constraint:
         """
         return 10 * x
 
+    def h_x(self, x):
+        """
+        Safety constraint.
+
+        """
+        h = x[1]
+        return h
+
     def h1_x(self, x):
         """
         Safety constraint.
 
         """
-        h = -x[0]
+        h = x[4]
+        return h
+
+    def h2_x(self, x):
+        """
+        Safety constraint.
+
+        """
+        h = self.theta_max**2 - x[2] ** 2
+        return h
+
+    def h3_x(self, x):
+        """
+        Safety constraint.
+
+        """
+        h = self.thetadot_max**2 - x[5] ** 2
         return h
 
     def grad_h1(self, x):
@@ -59,7 +89,15 @@ class Constraint:
         Reachability constraint.
 
         """
-        hb = -x[1]
+        hb = (
+            -1
+            / self.kappa
+            * math.log(
+                math.exp(-self.kappa * self.h1_x(x))
+                + math.exp(-self.kappa * self.h2_x(x))
+                + math.exp(-self.kappa * self.h3_x(x))
+            )
+        )
         return hb
 
     def grad_hb(self, x):
@@ -73,6 +111,8 @@ class Constraint:
 
 class ASIF(Constraint):
     def setupASIF(self, blending_bool=False, control_tightening=True) -> None:
+
+        super().__init__()
 
         # Backup properties
         self.backupTime = 1.25  # [sec] (total backup time)
@@ -116,13 +156,13 @@ class ASIF(Constraint):
                     t = self.del_t * i
 
                     # Gronwall bound
-                    # delta_t = (self.dw_max / self.L_cl) * (np.exp(self.L_cl * t) - 1)
+                    delta_t = (self.dw_max / self.L_cl) * (np.exp(self.L_cl * t) - 1)
 
-                    # Disturbance obs bound
-                    e_bar = np.exp(-t) * self.dw_max + (self.dv_max) * (1 - np.exp(-t))
-                    delta_t = ((self.dv_max / self.L_cl**2) + (e_bar / self.L_cl)) * (
-                        np.exp(self.L_cl * t - 1) - (self.dv_max / self.L_cl) * t
-                    )
+                    # # Disturbance obs bound
+                    # e_bar = np.exp(-t) * self.dw_max + (self.dv_max) * (1 - np.exp(-t))
+                    # delta_t = ((self.dv_max / self.L_cl**2) + (e_bar / self.L_cl)) * (
+                    #     np.exp(self.L_cl * t - 1) - (self.dv_max / self.L_cl) * t
+                    # )
 
                     # Tightening epsilon
                     epsilon = self.Lh_const * delta_t
@@ -155,7 +195,7 @@ class ASIF(Constraint):
 
             min_h_value = np.min(
                 [
-                    self.h1_x(phi[itx, :])
+                    self.h_x(phi[itx, :])
                     - int(self.control_tightening) * (self.delta_array[itx] + mu_d)
                     for itx in range(rtapoints)
                 ]
@@ -169,7 +209,7 @@ class ASIF(Constraint):
             # Calculate blending function
             u_b = self.backupControl(x)
 
-            u_act, lambda_score = self.blendInputs(x, u_des, u_b, np.max([hi_x, 0]))
+            u_act, lambda_score = self.blendInputs(x, u_des, u_b, np.max(hi_x, 0))
 
             self.lambda_score = lambda_score
 

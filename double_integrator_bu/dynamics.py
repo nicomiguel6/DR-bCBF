@@ -26,39 +26,30 @@ class Dynamics:
         blending_bool=False,
     ) -> None:
 
+        # A and B matrices constant
+        self.A = np.array([[0, 1], [0, 0]])
+        self.B = np.array([0, 1])
+
         # Integration options
-        self.int_options = {"rtol": 1e-3, "atol": 1e-3}
+        self.int_options = {"rtol": 1e-9, "atol": 1e-9}
         self.blending_bool = blending_bool
 
         # Simulation data
         self.del_t = 0.02  # [sec]
-        self.tf = 3.0
-        self.total_steps = int(self.tf / self.del_t) + 2
+        self.total_steps = int(15 / self.del_t) + 2
         self.curr_step = 0
 
         # Initial conditions
-        self.x0 = np.array([0.0, 500.0, 10.0, 0.0, 0.0, 0.0])
+        self.x0 = np.array([-0.5, 0.63])
 
         # Disturbances
-        self.dw_max = np.sqrt(1.5)
-        # self.dw_max = 0.08
-        self.omega = 0.3
+        self.dw_max = 0.2
+        self.omega = 0.25
         self.dv_max = self.omega * self.dw_max
 
         # Constant
-        max_xvel = np.sqrt(
-            2 * (self.tf * self.F_max * np.sin(np.radians(self.theta_max)) / self.m)
-            + 2 * self.tf
-        )
-        max_zvel = np.sqrt(2 * self.tf * (self.F_max / self.m - 9.81 + 0.5))
-        self.sup_fcl = np.sqrt(
-            max_xvel**2
-            + max_zvel**2
-            + self.thetadot_max**2
-            + (self.F_max * np.sin(np.radians(self.theta_max)) / self.m + 1) ** 2
-            + (self.F_max / self.m + 0.5 - 9.81) ** 2
-            + (self.M_max / self.J) ** 2
-        )
+        max_vel = 2  # based on starting x
+        self.sup_fcl = np.sqrt(max_vel**2 + 1)
 
     def propMain(self, t, x, u, dist, args):
         """
@@ -68,7 +59,7 @@ class Dynamics:
         """
         lenx = len(self.x0)
         dx = np.zeros_like(x)
-        dx[:lenx] = self.f_x(x[:lenx]) + self.g_x(x[:lenx]) @ u + dist
+        dx[:lenx] = self.f_x(x[:lenx]) + self.g_x(x[:lenx]) * u + dist
         if len(x) > lenx:
             # Construct F
             F = self.computeJacobianSTM(x[:lenx])
@@ -95,7 +86,7 @@ class Dynamics:
         Function f(x) for control affine dynamics, x_dot = f(x) + g(x)u.
 
         """
-        f = np.array([*x[-3:], 0.0, -9.81, 0.0])
+        f = self.A @ x
         return f
 
     def g_x(self, x):
@@ -103,16 +94,7 @@ class Dynamics:
         Function g(x) for control affine dynamics, x_dot = f(x) + g(x)u.
 
         """
-        g = np.array(
-            [
-                [0.0, 0.0],
-                [0.0, 0.0],
-                [0.0, 0.0],
-                [np.sin(np.radians(x[2])), 0.0],
-                [np.cos(np.radians(x[2])), 0.0],
-                [0.0, -1 / 0.25],
-            ]
-        )
+        g = self.B
         return g
 
     def integrateState(self, x, u, t_step, dist, options):
@@ -122,7 +104,6 @@ class Dynamics:
         """
         t_step = (0.0, t_step)
         args = {}
-
         soltn = solve_ivp(
             lambda t, x: self.propMain(t, x, u, dist, args),
             t_step,
@@ -131,7 +112,7 @@ class Dynamics:
             rtol=options["rtol"],
             atol=options["atol"],
         )
-        x = soltn.y[:, -1]  # * self.s
+        x = soltn.y[:, -1]
         return x
 
     def propMainBackup(self, t, x, args):
@@ -141,10 +122,10 @@ class Dynamics:
         """
         lenx = len(self.x0)
         dx = np.zeros_like(x)
-        dx[:lenx] = self.f(x[:lenx]) + self.g(x[:lenx]) * self.backupControl(x[:lenx])
+        dx[:lenx] = self.A @ x[:lenx] + self.B * self.backupControl(x[:lenx])
 
         # Construct F
-        F = self.f(x[:lenx])
+        F = self.A
 
         # Extract STM & reshape
         STM = x[lenx:].reshape(lenx, lenx)
@@ -166,28 +147,9 @@ class Dynamics:
         """
         lenx = len(self.x0)
         dx = np.zeros_like(x)
-        if self.observer:
-            dx = self.f_x(x) + self.g_x(x) @ self.backupControl(x) + self.d_hat_curr
-        else:
-            dx = self.f_x(x) + self.g_x(x) @ self.backupControl(x)
+        dx = self.A @ x + self.B * self.backupControl(x)
 
         return dx
-
-    def propMainBackupBlending_scaled(self, t, xtilde, args):
-        """
-        Scaled version of propMainBackupBlending for integrateStateBackup.
-        xtilde is the dimensionless state; we recover x_phys, run the blending
-        ODE, then return dx_tilde/dt = dx_phys/dt / s.
-        """
-        # 1) recover physical state
-        x_phys = xtilde * self.s
-
-        # 2) compute the physical‐state derivative under your existing backup‐blend ODE
-        dx_phys = self.propMainBackupBlending(t, x_phys, args)
-        #    (propMainBackupBlending should return a length‐6 dx_phys vector)
-
-        # 3) deflate back to dimensionless derivative
-        return dx_phys / self.s
 
     def integrateStateBackup(self, x, tspan_b, options):
         """
@@ -207,7 +169,6 @@ class Dynamics:
                 t_eval=tspan_b,
             )
         else:
-
             soltn = solve_ivp(
                 lambda t, x: self.propMainBackupBlending(t, x, args),
                 t_step,
@@ -218,39 +179,6 @@ class Dynamics:
                 t_eval=tspan_b,
             )
         x = soltn.y[:, :]
-        # return (x[:,].T * self.s).T
-        return x
-
-    def integrateStateBackupwithDhat(self, x, tspan_b, options):
-        """
-        Propagate backup flow over the backup horizon. Evaluate at discrete points.
-
-        """
-        t_step = (0.0, tspan_b[-1])
-        args = {}
-        if self.blending_bool is False:
-            soltn = solve_ivp(
-                lambda t, x: self.propMainBackup(t, x, args),
-                t_step,
-                x,
-                method="RK45",
-                rtol=options["rtol"],
-                atol=options["atol"],
-                t_eval=tspan_b,
-            )
-        else:
-
-            soltn = solve_ivp(
-                lambda t, x: self.propMainBackupBlending(t, x, args),
-                t_step,
-                x,
-                method="RK45",
-                rtol=options["rtol"],
-                atol=options["atol"],
-                t_eval=tspan_b,
-            )
-        x = soltn.y[:, :]
-        # return (x[:,].T * self.s).T
         return x
 
     def disturbanceFun(self, t, x, u, args):
@@ -258,10 +186,13 @@ class Dynamics:
         Process disturbance function, norm bounded by dw_max.
 
         """
-        dist_t = np.array([0, 0, 0, 1, 0.5 * np.sin(self.omega * t - (np.pi / 3)), 0])
-        # dist_t = np.random.uniform(-np.ones((1, 6)), np.ones((1, 6)))
-        dist_t = dist_t / np.linalg.norm(dist_t)
-        # dist_t = np.array(
-        #     [np.sin(self.omega * t + np.pi / 4), np.cos(self.omega * t + np.pi / 4)]
-        # )
-        return self.dw_max * dist_t
+        # dist_t = np.array([1, 1])
+        # dist_t = np.random.uniform([-1, -1], [1, 1])
+        dist_t = np.array(
+            [np.sin(self.omega * t + np.pi / 4), np.cos(self.omega * t + np.pi / 4)]
+        )
+        return (
+            (dist_t / (np.linalg.norm(dist_t))) * self.dw_max
+            if np.linalg.norm(dist_t) != 0
+            else dist_t
+        )

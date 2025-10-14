@@ -32,33 +32,23 @@ class Dynamics:
 
         # Simulation data
         self.del_t = 0.02  # [sec]
-        self.tf = 3.0
-        self.total_steps = int(self.tf / self.del_t) + 2
+        self.total_steps = int(5 / self.del_t) + 2
         self.curr_step = 0
 
         # Initial conditions
-        self.x0 = np.array([0.0, 500.0, 10.0, 0.0, 0.0, 0.0])
+        self.x0 = np.array([0.0, 3.0, 0.0, 0.0, 0.0, 0.0])
 
         # Disturbances
-        self.dw_max = np.sqrt(1.5)
-        # self.dw_max = 0.08
-        self.omega = 0.3
+        self.dw_max = 0.0
+        self.omega = 0.25
         self.dv_max = self.omega * self.dw_max
 
         # Constant
-        max_xvel = np.sqrt(
-            2 * (self.tf * self.F_max * np.sin(np.radians(self.theta_max)) / self.m)
-            + 2 * self.tf
-        )
-        max_zvel = np.sqrt(2 * self.tf * (self.F_max / self.m - 9.81 + 0.5))
-        self.sup_fcl = np.sqrt(
-            max_xvel**2
-            + max_zvel**2
-            + self.thetadot_max**2
-            + (self.F_max * np.sin(np.radians(self.theta_max)) / self.m + 1) ** 2
-            + (self.F_max / self.m + 0.5 - 9.81) ** 2
-            + (self.M_max / self.J) ** 2
-        )
+        max_vel = 2  # based on starting x
+        self.sup_fcl = np.sqrt(max_vel**2 + 1)
+
+        # Scaling
+        self.s = np.array([5, 5, 180, 5, 5, 3])
 
     def propMain(self, t, x, u, dist, args):
         """
@@ -83,12 +73,64 @@ class Dynamics:
 
         return dx
 
+    def propMain_scaled(self, t, x_tilde, u, dist, args):
+        """
+        Dimensionless ODE callback:
+          x_tilde_dot = ( f(x_phys) + g(x_phys) @ u + dist ) / s
+        """
+        # 1) recover physical state
+        x_phys = x_tilde * self.s
+
+        # 2) compute f and g in physical units
+        f_phys = self.f_x(x_phys)  # shape (6,)
+        g_phys = self.g_x(x_phys)  # shape (6,2)
+
+        # 3) compute RHS in physical units
+        rhs_phys = f_phys + g_phys.dot(u) + dist  # shape (6,)
+
+        # 4) return dimensionless derivative
+        return rhs_phys / self.s  # shape (6,)
+
     def computeJacobianSTM(self, x):
         """
         Compute Jacobian of dynamics.
         """
         jac = self.A
         return jac
+
+    def fScaled(self, t, Xtilde, u, dist):
+        # 1) Recover the real state
+        X = self.s * Xtilde  # element‐wise multiply
+
+        # 2) Call your original f_x and g_x on the real state
+        f_real = self.f_x(X)  # shape (6,)
+        g_real = self.g_x(X)  # shape (6,2)
+
+        # 3) Build u‐term and disturbance in real units
+        gu_real = g_real @ u  # shape (6,)
+
+        # 4) Combine to get Xdot in real units
+        Xdot_real = f_real + gu_real + dist
+
+        # 5) Scale back to get d(Xtilde)/dt
+        return Xdot_real / self.s  # shape (6,)
+
+    def integrateStateScaled(self, x, u, t_step, dist, options):
+        """
+        State integrator using propagation function.
+
+        """
+        t_step = (0.0, t_step)
+        soltn = solve_ivp(
+            lambda t, x: self.fScaled(t, x, u, dist),
+            t_step,
+            x,
+            method="RK45",
+            rtol=options["rtol"],
+            atol=options["atol"],
+        )
+        x = soltn.y[:, -1]
+        return x
 
     def f_x(self, x):
         """
@@ -108,8 +150,8 @@ class Dynamics:
                 [0.0, 0.0],
                 [0.0, 0.0],
                 [0.0, 0.0],
-                [np.sin(np.radians(x[2])), 0.0],
-                [np.cos(np.radians(x[2])), 0.0],
+                [np.sin(x[2] * np.pi / 180), 0.0],
+                [np.cos(x[2] * np.pi / 180), 0.0],
                 [0.0, -1 / 0.25],
             ]
         )
@@ -123,6 +165,8 @@ class Dynamics:
         t_step = (0.0, t_step)
         args = {}
 
+        x_tilde = x / self.s
+
         soltn = solve_ivp(
             lambda t, x: self.propMain(t, x, u, dist, args),
             t_step,
@@ -131,7 +175,7 @@ class Dynamics:
             rtol=options["rtol"],
             atol=options["atol"],
         )
-        x = soltn.y[:, -1]  # * self.s
+        x = soltn.y[:, -1] * self.s
         return x
 
     def propMainBackup(self, t, x, args):
@@ -166,10 +210,7 @@ class Dynamics:
         """
         lenx = len(self.x0)
         dx = np.zeros_like(x)
-        if self.observer:
-            dx = self.f_x(x) + self.g_x(x) @ self.backupControl(x) + self.d_hat_curr
-        else:
-            dx = self.f_x(x) + self.g_x(x) @ self.backupControl(x)
+        dx = self.f_x(x) + self.g_x(x) @ self.backupControl(x)
 
         return dx
 
@@ -207,38 +248,7 @@ class Dynamics:
                 t_eval=tspan_b,
             )
         else:
-
-            soltn = solve_ivp(
-                lambda t, x: self.propMainBackupBlending(t, x, args),
-                t_step,
-                x,
-                method="RK45",
-                rtol=options["rtol"],
-                atol=options["atol"],
-                t_eval=tspan_b,
-            )
-        x = soltn.y[:, :]
-        # return (x[:,].T * self.s).T
-        return x
-
-    def integrateStateBackupwithDhat(self, x, tspan_b, options):
-        """
-        Propagate backup flow over the backup horizon. Evaluate at discrete points.
-
-        """
-        t_step = (0.0, tspan_b[-1])
-        args = {}
-        if self.blending_bool is False:
-            soltn = solve_ivp(
-                lambda t, x: self.propMainBackup(t, x, args),
-                t_step,
-                x,
-                method="RK45",
-                rtol=options["rtol"],
-                atol=options["atol"],
-                t_eval=tspan_b,
-            )
-        else:
+            xt0 = x / self.s
 
             soltn = solve_ivp(
                 lambda t, x: self.propMainBackupBlending(t, x, args),
@@ -258,10 +268,13 @@ class Dynamics:
         Process disturbance function, norm bounded by dw_max.
 
         """
-        dist_t = np.array([0, 0, 0, 1, 0.5 * np.sin(self.omega * t - (np.pi / 3)), 0])
+        dist_t = np.array([1, 1, 1, 1, 1, 1])
         # dist_t = np.random.uniform(-np.ones((1, 6)), np.ones((1, 6)))
-        dist_t = dist_t / np.linalg.norm(dist_t)
         # dist_t = np.array(
         #     [np.sin(self.omega * t + np.pi / 4), np.cos(self.omega * t + np.pi / 4)]
         # )
-        return self.dw_max * dist_t
+        return (
+            (dist_t / (np.linalg.norm(dist_t))) * self.dw_max
+            if np.linalg.norm(dist_t) != 0
+            else dist_t
+        )

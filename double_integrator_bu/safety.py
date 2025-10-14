@@ -169,7 +169,7 @@ class ASIF(Constraint):
             # Calculate blending function
             u_b = self.backupControl(x)
 
-            u_act, lambda_score = self.blendInputs(x, u_des, u_b, np.max([hi_x, 0]))
+            u_act, lambda_score = self.blendInputs(x, u_des, u_b, np.max(hi_x, 0))
 
             self.lambda_score = lambda_score
 
