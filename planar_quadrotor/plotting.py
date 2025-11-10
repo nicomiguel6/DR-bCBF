@@ -73,9 +73,9 @@ class Plotter:
         def setupPhasePlot(fig=None, ax=None):
             colors = False
             # Plot limits
-            x_max = 25.0
+            x_max = 15.0
             x_min = -2
-            y_max = 30.4
+            y_max = 15.4
             y_min = -0.4
             # x_c = np.linspace(-4, 0, 1000)
             # y_c = np.sqrt(-2 * x_c * env.u_max)

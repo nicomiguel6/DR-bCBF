@@ -37,7 +37,7 @@ class Dynamics:
         self.curr_step = 0
 
         # Initial conditions
-        self.x0 = np.array([0.0, 500.0, 10.0, 0.0, 0.0, 0.0])
+        self.x0 = np.array([0.0, 5.0, 10.0, 0.0, 0.0, 0.0])
 
         # Disturbances
         self.dw_max = np.sqrt(1.5)
@@ -173,22 +173,6 @@ class Dynamics:
 
         return dx
 
-    def propMainBackupBlending_scaled(self, t, xtilde, args):
-        """
-        Scaled version of propMainBackupBlending for integrateStateBackup.
-        xtilde is the dimensionless state; we recover x_phys, run the blending
-        ODE, then return dx_tilde/dt = dx_phys/dt / s.
-        """
-        # 1) recover physical state
-        x_phys = xtilde * self.s
-
-        # 2) compute the physical‐state derivative under your existing backup‐blend ODE
-        dx_phys = self.propMainBackupBlending(t, x_phys, args)
-        #    (propMainBackupBlending should return a length‐6 dx_phys vector)
-
-        # 3) deflate back to dimensionless derivative
-        return dx_phys / self.s
-
     def integrateStateBackup(self, x, tspan_b, options):
         """
         Propagate backup flow over the backup horizon. Evaluate at discrete points.
@@ -223,7 +207,7 @@ class Dynamics:
 
     def integrateStateBackupwithDhat(self, x, tspan_b, options):
         """
-        Propagate backup flow over the backup horizon. Evaluate at discrete points.
+        Propagate backup flow over the backup horizon . Evaluate at discrete points.
 
         """
         t_step = (0.0, tspan_b[-1])

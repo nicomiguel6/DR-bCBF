@@ -155,6 +155,7 @@ class Simulation(ASIF, Control, Dynamics):
 
             self.curr_step += 1
             self.d_hat_curr = d_hat_curr
+            print("Current disturbance estimation: " + str(self.d_hat_curr))
             # if self.h1_x(x_curr) < 0:
             #     print("Crashed")
 
@@ -186,7 +187,7 @@ class Simulation(ASIF, Control, Dynamics):
 if __name__ == "__main__":
 
     # deltad = [0.05, 0.1, 0.25, 0.5]  # Disturbance magnitudes
-    deltad = [np.sqrt(1.5)]  # For testing purposes
+    deltad = [np.sqrt(1.5)]  # For testing purposes with observer
 
     x_all = []
     u_des_all = []

@@ -109,7 +109,7 @@ class ASIF(Constraint):
         super().__init__()
 
         # Backup properties
-        self.backupTime = 0.1  # [sec] (total backup time)
+        self.backupTime = 1.00 # [sec] (total backup time)
         self.backupTrajs = []
         self.backup_save_N = 10  # saves every N backup trajectory (for plotting)
         self.delta_array = []  # saves each run's delta array
@@ -152,17 +152,17 @@ class ASIF(Constraint):
 
             # Discretization tightening constant
             mu_d = (self.del_t / 2) * self.Lh_const * (self.sup_fcl + self.dw_max)
-            # Disturbance error bound
+            # Disturbance error bound at current global time
             e_bar = np.exp(-self.disturbance_gain * t_global) * self.dw_max + (
                 self.dv_max / self.disturbance_gain
             ) * (1 - np.exp(-self.disturbance_gain * t_global))
 
             ind_delta_array = [0]  # store current run's delta array
 
-            # if len(self.delta_array) < rtapoints:
+            # at every point in backup trajectory propagation
             for i in range(1, rtapoints):
                 # calculate tightening terms
-                t = self.del_t * i
+                t = self.del_t * i # local time
 
                 # Gronwall bound
                 # delta_t = (self.dw_max / self.L_cl) * (np.exp(self.L_cl * t) - 1)

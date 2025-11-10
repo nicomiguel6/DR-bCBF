@@ -80,8 +80,8 @@ class ASIF(Constraint):
         self.delta_array = [0]
 
         # Tightening constants
-        self.Lh_const = 1
-        self.Lhb_const = 1
+        self.Lh_const = 2*self.theta_max
+        self.Lhb_const = self.theta_max * max(np.linalg.eigvals(self.P))
         self.L_cl = 1  # Lipschitz constant of closed-loop dynamics
 
         # Blending constants
