@@ -48,6 +48,7 @@ class Plotter:
         save_plots=False,
         show_plots=True,
         legend_flag=False,
+        all=False,
     ):
         if latex_plots:
             plt.rcParams.update(
@@ -61,8 +62,11 @@ class Plotter:
         title_sz, xaxis_sz, legend_sz, ticks_sz = 20, 23, 18, 16
         lwp = 2.2
         lwp_sets = 2
-        x1 = x[0, :]
-        x2 = x[1, :]
+        if not all:
+            x = x[0]
+            env = env[0]
+            x1 = x[0, :]
+            x2 = x[1, :]
 
         def setupPhasePlot(fig=None, ax=None):
             colors = True
@@ -276,7 +280,7 @@ class Plotter:
         # Phase plot 2 (with GW disturbance radii)
         if phase_plot_2a:
             setupPhasePlot()
-            plt.plot(x1, x2, "-", color="magenta", linewidth=lwp, label="Trajectory")
+            # plt.plot(x1, x2, "-", color="magenta", linewidth=lwp, label="Trajectory")
 
             ax = plt.gca()
 

@@ -36,11 +36,11 @@ class Dynamics:
 
         # Simulation data
         self.del_t = 0.02  # [sec]
-        self.total_steps = int(15 / self.del_t) + 2
+        self.total_steps = int(5 / self.del_t) + 2
         self.curr_step = 0
 
         # Initial conditions
-        self.x0 = np.array([-0.5, 0.63])
+        self.x0 = np.array([-1.0, 0.6])
 
         # Disturbances
         self.dw_max = 0.2

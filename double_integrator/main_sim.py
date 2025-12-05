@@ -148,58 +148,76 @@ class Simulation(ASIF, Control, Dynamics):
 
 if __name__ == "__main__":
 
-    env = Simulation(
-        safety_flag=True,
-        verbose=True,
-        robust=True,
-        dw_bool=True,
-        blending_bool=True,
-        primary_control=False,
-        control_tightening=True,
-    )
-    print(
-        "Running simulation with parameters:",
-        "Safety:",
-        env.safety_flag,
-        "| Robustness:",
-        env.robust,
-        "| Process dist:",
-        env.dw_bool,
-    )
+    deltad = [0.05, 0.1, 0.25, 0.5] # Disturbance magnitudes
 
-    (
-        x_full,
-        total_steps,
-        u_des_full,
-        u_act_full,
-        intervened,
-        avg_solver_t,
-        max_solver_t,
-        lambda_scores,
-    ) = env.sim()
+    x_all = []
+    u_des_all = []
+    u_act_all = []
+    lambda_scores_all = []
+    env_all = []
 
-    # timestamp = datetime.now().strftime("%Y%m%d%H%M%s")
-    filename = "data\\Blending_{}_Tightening_{}".format(
-        env.blending_bool, env.control_tightening
-    )
+    for delta_d in deltad:
 
-    data_store_dict = {
-        "x_full": x_full,
-        "total_steps": total_steps,
-        "u_des_full": u_des_full,
-        "u_act_full": u_act_full,
-        "intervened": intervened,
-        "avg_solver_t": avg_solver_t,
-        "max_solver_t": max_solver_t,
-        "lambda_scores": lambda_scores,
-    }
+        env = Simulation(
+            safety_flag=True,
+            verbose=True,
+            robust=True,
+            dw_bool=True,
+            blending_bool=True,
+            primary_control=False,
+            control_tightening=True,
+        )
+        print(
+            "Running simulation with parameters:",
+            "Safety:",
+            env.safety_flag,
+            "| Robustness:",
+            env.robust,
+            "| Process dist:",
+            env.dw_bool,
+            "| dw_max:",
+            env.dw_max
+        )
 
-    attrs = {k: v for k, v in env.__dict__.items() if not k.startswith("_")}
+        (
+            x_full,
+            total_steps,
+            u_des_full,
+            u_act_full,
+            intervened,
+            avg_solver_t,
+            max_solver_t,
+            lambda_scores,
+        ) = env.sim()
 
-    data_store_dict.update(attrs)
+        # timestamp = datetime.now().strftime("%Y%m%d%H%M%s")
+        filename = "data\\Disturbance_deltad_{}".format(
+            env.dw_max
+        )
 
-    # with open(filename, "w") as outfile:
-    #     json.dump(data_store_dict, outfile)
+        data_store_dict = {
+            "x_full": x_full,
+            "total_steps": total_steps,
+            "u_des_full": u_des_full,
+            "u_act_full": u_act_full,
+            "intervened": intervened,
+            "avg_solver_t": avg_solver_t,
+            "max_solver_t": max_solver_t,
+            "lambda_scores": lambda_scores,
+        }
+
+        attrs = {k: v for k, v in env.__dict__.items() if not k.startswith("_")}
+
+        data_store_dict.update(attrs)
+
+        # with open(filename, "w") as outfile:
+        #     json.dump(data_store_dict, outfile)
+
+        x_all.append(x_full)
+        u_des_all.append(u_des_full)
+        u_act_all.append(u_act_full)
+        lambda_scores_all.append(lambda_scores)
+        env_all.append(env)
 
     p = Plotter()
 
@@ -222,4 +240,5 @@ if __name__ == "__main__":
         save_plots=False,
         show_plots=True,
         legend_flag=True,
+        all=True,
     )
