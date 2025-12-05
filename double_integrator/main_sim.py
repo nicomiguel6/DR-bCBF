@@ -167,6 +167,7 @@ if __name__ == "__main__":
             primary_control=False,
             control_tightening=True,
         )
+        env.dw_max = delta_d
         print(
             "Running simulation with parameters:",
             "Safety:",
@@ -222,14 +223,14 @@ if __name__ == "__main__":
     p = Plotter()
 
     p.plotter(
-        x_full,
-        u_act_full,
+        x_all,
+        u_act_all,
         intervened,
-        u_des_full,
-        env,
-        lambda_scores,
-        phase_plot_1=False,
-        phase_plot_2a=True,
+        u_des_all,
+        env_all,
+        lambda_scores_all,
+        phase_plot_1=True,
+        phase_plot_2a=False,
         phase_plot_2b=False,
         phase_plot_CI=False,
         phase_plot_nominal=False,

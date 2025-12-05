@@ -186,11 +186,11 @@ class Dynamics:
         Process disturbance function, norm bounded by dw_max.
 
         """
-        # dist_t = np.array([1, 1])
+        dist_t = np.array([1, 1])
         # dist_t = np.random.uniform([-1, -1], [1, 1])
-        dist_t = np.array(
-            [np.sin(self.omega * t + np.pi / 4), np.cos(self.omega * t + np.pi / 4)]
-        )
+        # dist_t = np.array(
+        #     [np.sin(self.omega * t + np.pi / 4), np.cos(self.omega * t + np.pi / 4)]
+        # )
         return (
             (dist_t / (np.linalg.norm(dist_t))) * self.dw_max
             if np.linalg.norm(dist_t) != 0

@@ -254,8 +254,18 @@ class Plotter:
         # Phase plot 1 (no disturbance radii)
         if phase_plot_1:
             setupPhasePlot()
-            plt.plot(x1, x2, "-", color="magenta", linewidth=lwp, label="Trajectory")
             ax = plt.gca()
+            for itr, x_data in enumerate(x):
+                env_curr = env[itr]
+                plt.plot(
+                    x_data[0, :],
+                    x_data[1, :],
+                    "-",
+                    color="magenta",
+                    linewidth=lwp,
+                    label="Trajectory",
+                )
+            #plt.plot(x1, x2, "-", color="magenta", linewidth=lwp, label="Trajectory")
 
             if env.backupTrajs:
                 for i, xy in enumerate(env.backupTrajs):
@@ -280,7 +290,7 @@ class Plotter:
         # Phase plot 2 (with GW disturbance radii)
         if phase_plot_2a:
             setupPhasePlot()
-            # plt.plot(x1, x2, "-", color="magenta", linewidth=lwp, label="Trajectory")
+            plt.plot(x1, x2, "-", color="magenta", linewidth=lwp, label="Trajectory")
 
             ax = plt.gca()
 
